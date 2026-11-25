@@ -1,0 +1,17 @@
+# Local settings (may contain your API key) and all trading data
+config.json
+data/
+data_backup_*/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

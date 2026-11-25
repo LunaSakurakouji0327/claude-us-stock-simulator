@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude US Stock Simulator</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◆</span>
+    <div>
+      <h1>Claude 美股实时操作模拟器</h1>
+      <p class="sub" id="subtitle">Claude US Stock Simulator · 模拟盘，不涉及真实资金</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span class="pill" id="run-pill">加载中…</span>
+    <button class="btn primary" id="run-now">立即运行一次</button>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="overview" aria-selected="true">概览</button>
+  <button role="tab" data-tab="journal">交易日记</button>
+  <button role="tab" data-tab="trades">交易明细</button>
+  <button role="tab" data-tab="notes">笔记与留言</button>
+  <button role="tab" data-tab="settings">设置</button>
+</nav>
+
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- 概览 -->
+  <section id="tab-overview" class="tab-panel">
+    <div class="tiles" id="tiles"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>收益曲线</h2>
+        <div class="legend" id="legend"></div>
+        <button class="btn ghost small" id="toggle-table">表格</button>
+      </div>
+      <div id="chart" class="chart"></div>
+      <div id="chart-table" class="table-wrap" hidden></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>当前持仓</h2></div>
+        <div id="positions" class="table-wrap"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>最近一次决策</h2><span class="muted small" id="latest-time"></span></div>
+        <div id="latest"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 日记 -->
+  <section id="tab-journal" class="tab-panel" hidden>
+    <div class="toolbar">
+      <input type="search" id="journal-search" placeholder="搜索代码、理由、市场判断…">
+      <label class="check"><input type="checkbox" id="journal-only-trades"> 只看有交易的</label>
+      <label class="check"><input type="checkbox" id="journal-show-errors"> 显示失败的运行</label>
+      <a class="btn ghost small" href="/api/journal" target="_blank" rel="noopener">原始 journal.md</a>
+    </div>
+    <div id="journal"></div>
+  </section>
+
+  <!-- 交易明细 -->
+  <section id="tab-trades" class="tab-panel" hidden>
+    <div class="tiles" id="trade-stats"></div>
+    <div class="card"><div id="trades" class="table-wrap"></div></div>
+  </section>
+
+  <!-- 笔记与留言 -->
+  <section id="tab-notes" class="tab-panel" hidden>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>Claude 的策略笔记</h2></div>
+        <p class="muted small">Claude 每次运行结束时都会重写这份笔记，下次运行时再读回来，策略才能连贯。</p>
+        <div id="notes" class="notes"></div>
+        <h3>观察名单</h3>
+        <div id="watchlist" class="chips"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>给 Claude 留言</h2></div>
+        <p class="muted small">留言会附在之后每一次运行的提示里，Claude 会在日记里回复。不想再说了就清空。</p>
+        <textarea id="message" rows="6" placeholder="比如：最近别碰中概股；或者：解释一下你为什么一直拿着现金？"></textarea>
+        <div class="row-end"><button class="btn primary" id="save-message">保存留言</button></div>
+        <h3>最近的回复</h3>
+        <div id="replies"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 设置 -->
+  <section id="tab-settings" class="tab-panel" hidden>
+    <form id="settings" class="settings" autocomplete="off">
+      <fieldset class="card">
+        <legend>账户</legend>
+        <label>本金（美元）<input type="number" name="starting_cash" min="100" step="100" required></label>
+        <label>对比基准<input type="text" name="benchmark" maxlength="10" placeholder="SPY"></label>
+        <p class="hint" id="cash-hint">本金只在账户开始时使用。已经开始的账户改本金后，需要在页面底部「重置账户」才生效。</p>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>炒股风格</legend>
+        <div class="style-grid" id="style-grid"></div>
+        <label>补充要求 / 自定义风格描述
+          <textarea name="custom_style_prompt" rows="4" placeholder="选「自定义」时必填，写你希望 Claude 怎么炒；选其他风格时会作为补充要求，比如：不买烟草和军工股。"></textarea>
+        </label>
+        <label>单只持仓上限
+          <select name="max_position_pct">
+            <option value="">跟随风格默认</option>
+            <option value="0.1">10%</option><option value="0.15">15%</option><option value="0.2">20%</option>
+            <option value="0.3">30%</option><option value="0.4">40%</option><option value="0.6">60%</option>
+            <option value="1">不限制</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>检查频率</legend>
+        <label class="switch"><input type="checkbox" name="enabled"> 开盘时间自动运行</label>
+        <div class="row">
+          <label>每隔几小时检查一次
+            <select name="interval_hours">
+              <option value="0.5">0.5 小时</option><option value="1">1 小时</option><option value="1.5">1.5 小时</option>
+              <option value="2">2 小时</option><option value="3">3 小时</option><option value="4">4 小时</option>
+              <option value="6.5">每天一次</option>
+            </select>
+          </label>
+          <label>每天第一次（美东时间）<input type="time" name="first_run_et" min="09:30" max="15:59" required></label>
+        </div>
+        <p class="hint" id="schedule-preview"></p>
+      </fieldset>
+
+      <fieldset class="card">
+        <legend>调用 Claude 的方式</legend>
+        <div class="radio-cards">
+          <label class="radio-card"><input type="radio" name="backend" value="subscription">
+            <strong>用我的 Claude 订阅</strong>
+            <span>Pro / Max 等包含 Claude Code 的套餐。通过本机 Claude Code 调用，占用订阅额度，不另外付费。需要先装好 Claude Code 并登录。</span>
+            <span class="status" id="cli-status"></span>
+          </label>
+          <label class="radio-card"><input type="radio" name="backend" value="api">
+            <strong>用 API key（按量付费）</strong>
+            <span>在 platform.claude.com 创建 key，按 token 计费。建议在 Console 设置月度预算上限。</span>
+          </label>
+        </div>
+        <div class="row">
+          <label>模型
+            <select name="model">
+              <option value="opus">Opus（最强，最贵 / 最占额度）</option>
+              <option value="sonnet">Sonnet（均衡）</option>
+              <option value="haiku">Haiku（最省）</option>
+            </select>
+          </label>
+          <label>每次最多搜索新闻
+            <input type="number" name="web_search_max_uses" min="0" max="20">
+          </label>
+        </div>
+        <div id="api-fields">
+          <label>API key
+            <input type="password" name="api_key" placeholder="sk-ant-…（留空 = 保持不变）">
+          </label>
+          <p class="hint" id="key-hint"></p>
+          <label>思考深度（effort）
+            <select name="effort">
+              <option value="low">low</option><option value="medium">medium</option><option value="high">high</option>
+              <option value="xhigh">xhigh</option><option value="max">max</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <details class="card">
+        <summary>高级：模拟成交</summary>
+        <div class="row">
+          <label>滑点<input type="number" name="slippage" min="0" max="0.05" step="0.0001"></label>
+          <label>每笔佣金（美元）<input type="number" name="commission" min="0" step="0.01"></label>
+          <label>每次最多工具轮数<input type="number" name="max_turns" min="5" max="100"></label>
+        </div>
+        <label class="switch"><input type="checkbox" name="allow_fractional"> 允许碎股</label>
+      </details>
+
+      <div class="save-bar">
+        <span id="save-msg" class="muted"></span>
+        <button class="btn primary" type="submit">保存设置</button>
+      </div>
+    </form>
+
+    <div class="card danger">
+      <h2>重置账户</h2>
+      <p>把当前所有记录挪到 <code>data_backup_日期时间/</code>，然后按上面的本金和风格重新开始。旧数据不会删除。</p>
+      <button class="btn danger" id="reset">重置账户…</button>
+    </div>
+  </section>
+</main>
+
+<div id="tooltip" class="tooltip" role="status" hidden></div>
+<footer class="foot muted small">模拟盘实验，不构成投资建议。行情来自 Yahoo Finance，可能有延迟。<span id="version"></span></footer>
+<script src="/app.js"></script>
+</body>
+</html>
